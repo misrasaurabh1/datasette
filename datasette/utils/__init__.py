@@ -342,10 +342,26 @@ _boring_keyword_re = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 
 
 def escape_css_string(s):
-    return _css_re.sub(
-        lambda m: "\\" + (f"{ord(m.group()):X}".zfill(6)),
-        s.replace("\r\n", "\n"),
-    )
+    # Fast-path: check if the string needs escaping or CRLF normalization
+    if "\r" not in s and "\n" not in s and '"' not in s and "'" not in s and "\\" not in s:
+        return s
+    repl = {
+        "'": "\\000027",
+        '"': "\\000022",
+        "\n": "\\00000A",
+        "\\": "\\00005C"
+    }
+    # First normalize CRLF to LF, only if present
+    if "\r" in s:
+        s = s.replace("\r\n", "\n")
+    # Manual char list for faster substitution
+    out = []
+    for c in s:
+        if c in repl:
+            out.append(repl[c])
+        else:
+            out.append(c)
+    return ''.join(out)
 
 
 def escape_sqlite(s):
