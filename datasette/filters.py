@@ -202,6 +202,19 @@ class TemplatedFilter(Filter):
         self.numeric = numeric
         self.no_argument = no_argument
 
+        # Precompute the formatting function for fast calls
+        if callable(human_template):
+            if no_argument:
+                self._human_func = lambda column, value: human_template(column, value).format(c=column)
+            else:
+                self._human_func = lambda column, value: human_template(column, value).format(c=column, v=value)
+        else:
+            # human_template is a string template
+            if no_argument:
+                self._human_func = lambda column, value: human_template.format(c=column)
+            else:
+                self._human_func = lambda column, value: human_template.format(c=column, v=value)
+
     def where_clause(self, table, column, value, param_counter):
         converted = self.format.format(value)
         if self.numeric and converted.isdigit():
@@ -214,14 +227,7 @@ class TemplatedFilter(Filter):
         return self.sql_template.format(**kwargs), converted
 
     def human_clause(self, column, value):
-        if callable(self.human_template):
-            template = self.human_template(column, value)
-        else:
-            template = self.human_template
-        if self.no_argument:
-            return template.format(c=column)
-        else:
-            return template.format(c=column, v=value)
+        return self._human_func(column, value)
 
 
 class InFilter(Filter):
