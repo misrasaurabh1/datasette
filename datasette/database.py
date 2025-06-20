@@ -43,27 +43,31 @@ class Database:
         memory_name=None,
         mode=None,
     ):
-        self.name = None
+        # Set thread local id up-front
         self._thread_local_id = f"x{self._thread_local_id_counter}"
         Database._thread_local_id_counter += 1
-        self.route = None
+
         self.ds = ds
         self.path = path
-        self.is_mutable = is_mutable
-        self.is_memory = is_memory
+        self.name = None
+        self.route = None
+
         self.memory_name = memory_name
-        if memory_name is not None:
-            self.is_memory = True
+        # Only set is_memory to True if memory_name given, otherwise keep provided arg
+        self.is_memory = True if memory_name is not None else is_memory
+        self.is_mutable = is_mutable
+
         self.cached_hash = None
         self.cached_size = None
         self._cached_table_counts = None
+
+        # All connection/threading attributes grouped together
         self._write_thread = None
         self._write_queue = None
-        # These are used when in non-threaded mode:
         self._read_connection = None
         self._write_connection = None
-        # This is used to track all file connections so they can be closed
         self._all_file_connections = []
+
         self.mode = mode
 
     @property
@@ -85,12 +89,12 @@ class Database:
         return md5_not_usedforsecurity(self.name)[:6]
 
     def suggest_name(self):
-        if self.path:
-            return Path(self.path).stem
-        elif self.memory_name:
+        path = self.path
+        if path:
+            return Path(path).stem
+        if self.memory_name:
             return self.memory_name
-        else:
-            return "db"
+        return "db"
 
     def connect(self, write=False):
         extra_kwargs = {}
