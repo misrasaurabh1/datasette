@@ -101,33 +101,51 @@ class Facet:
         return urllib.parse.parse_qsl(self.request.query_string, keep_blank_values=True)
 
     def get_facet_size(self):
-        facet_size = self.ds.setting("default_facet_size")
-        max_returned_rows = self.ds.setting("max_returned_rows")
+        ds = self.ds
+        request = self.request
+        database = self.database
+        table = self.table
+
+        facet_size = ds.setting("default_facet_size")
+        max_returned_rows = ds.setting("max_returned_rows")
         table_facet_size = None
-        if self.table:
-            config_facet_size = (
-                self.ds.config.get("databases", {})
-                .get(self.database, {})
-                .get("tables", {})
-                .get(self.table, {})
-                .get("facet_size")
-            )
-            if config_facet_size:
-                table_facet_size = config_facet_size
-        custom_facet_size = self.request.args.get("_facet_size")
+
+        # Optimized deeply nested dict gets in one loop instead of repeated .get() chains
+        if table:
+            dbs = ds.config.get("databases")
+            if dbs is not None:
+                db = dbs.get(database)
+                if db is not None:
+                    tbls = db.get("tables")
+                    if tbls is not None:
+                        tbl = tbls.get(table)
+                        if tbl is not None:
+                            config_facet_size = tbl.get("facet_size")
+                            if config_facet_size:
+                                table_facet_size = config_facet_size
+
+        # Fast local for request arg lookup
+        custom_facet_size = request.args.get("_facet_size")
+        # Only convert custom_facet_size if it influences result
         if custom_facet_size:
             if custom_facet_size == "max":
                 facet_size = max_returned_rows
+                custom_facet_size_set = True
             elif custom_facet_size.isdigit():
                 facet_size = int(custom_facet_size)
+                custom_facet_size_set = True
             else:
-                # Invalid value, ignore it
-                custom_facet_size = None
-        if table_facet_size and not custom_facet_size:
+                custom_facet_size_set = False  # Invalid, ignore
+        else:
+            custom_facet_size_set = False
+
+        # Only run this if table_facet_size provided and user did NOT override
+        if table_facet_size and not custom_facet_size_set:
             if table_facet_size == "max":
                 facet_size = max_returned_rows
             else:
                 facet_size = table_facet_size
+
         return min(facet_size, max_returned_rows)
 
     async def suggest(self):
