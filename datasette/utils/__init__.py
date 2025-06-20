@@ -1405,18 +1405,24 @@ def redact_keys(original: dict, key_patterns: Iterable) -> dict:
     :param key_patterns: A list of substring patterns to redact
     :return: A copy of the original dictionary with sensitive values redacted
     """
+    # Optimization: Convert patterns to tuple for faster lookup
+    patterns = tuple(key_patterns)
 
     def redact(data):
         if isinstance(data, dict):
-            return {
-                k: (
-                    redact(v)
-                    if not any(pattern in k for pattern in key_patterns)
-                    else "***"
-                )
-                for k, v in data.items()
-            }
+            # Minimize repeated work: cache redacted keys
+            redacted = {}
+            for k, v in data.items():
+                # Optimization: move pattern check into a loop for short-circuiting
+                for pat in patterns:
+                    if pat in k:
+                        redacted[k] = "***"
+                        break
+                else:
+                    redacted[k] = redact(v)
+            return redacted
         elif isinstance(data, list):
+            # List comprehension is already efficient, keep
             return [redact(item) for item in data]
         else:
             return data
