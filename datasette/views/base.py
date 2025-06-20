@@ -390,16 +390,16 @@ class DataView(BaseView):
 
     def set_response_headers(self, response, ttl):
         # Set far-future cache expiry
+        headers = response.headers
         if self.ds.cache_headers and response.status == 200:
-            ttl = int(ttl)
-            if ttl == 0:
-                ttl_header = "no-cache"
+            ttl_int = int(ttl)
+            if ttl_int == 0:
+                headers["Cache-Control"] = "no-cache"
             else:
-                ttl_header = f"max-age={ttl}"
-            response.headers["Cache-Control"] = ttl_header
-        response.headers["Referrer-Policy"] = "no-referrer"
+                headers["Cache-Control"] = f"max-age={ttl_int}"
+        headers["Referrer-Policy"] = "no-referrer"
         if self.ds.cors:
-            add_cors_headers(response.headers)
+            add_cors_headers(headers)
         return response
 
 
