@@ -6,8 +6,11 @@ import time
 
 def header(key, request):
     key = key.replace("_", "-").encode("utf-8")
-    headers_dict = dict(request.scope["headers"])
-    return headers_dict.get(key, b"").decode("utf-8")
+    # Efficient lookup: iterate once, stop at match (faster and lower memory than dict())
+    for h_key, h_val in request.scope["headers"]:
+        if h_key == key:
+            return h_val.decode("utf-8")
+    return ""
 
 
 def actor(key, request):
@@ -26,10 +29,7 @@ def now(key, request):
     elif key == "date_utc":
         return datetime.datetime.now(datetime.timezone.utc).date().isoformat()
     elif key == "datetime_utc":
-        return (
-            datetime.datetime.now(datetime.timezone.utc).strftime(r"%Y-%m-%dT%H:%M:%S")
-            + "Z"
-        )
+        return datetime.datetime.now(datetime.timezone.utc).strftime(r"%Y-%m-%dT%H:%M:%S") + "Z"
     else:
         raise KeyError
 
