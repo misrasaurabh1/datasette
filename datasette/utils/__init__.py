@@ -657,8 +657,10 @@ def filters_should_redirect(special_args):
     redirect_params = []
     # Handle _filter_column=foo&_filter_op=exact&_filter_value=...
     filter_column = special_args.get("_filter_column")
-    filter_op = special_args.get("_filter_op") or ""
-    filter_value = special_args.get("_filter_value") or ""
+    filter_op = special_args.get("_filter_op")
+    filter_op = filter_op if filter_op is not None else ""
+    filter_value = special_args.get("_filter_value")
+    filter_value = filter_value if filter_value is not None else ""
     if "__" in filter_op:
         filter_op, filter_value = filter_op.split("__", 1)
     if filter_column:
@@ -667,23 +669,33 @@ def filters_should_redirect(special_args):
         if key in special_args:
             redirect_params.append((key, None))
     # Now handle _filter_column_1=name&_filter_op_1=contains&_filter_value_1=hello
-    column_keys = [k for k in special_args if filter_column_re.match(k)]
-    for column_key in column_keys:
-        number = column_key.split("_")[-1]
-        column = special_args[column_key]
-        op = special_args.get(f"_filter_op_{number}") or "exact"
-        value = special_args.get(f"_filter_value_{number}") or ""
-        if "__" in op:
-            op, value = op.split("__", 1)
-        if column:
-            redirect_params.append((f"{column}__{op}", value))
-        redirect_params.extend(
-            [
-                (f"_filter_column_{number}", None),
-                (f"_filter_op_{number}", None),
-                (f"_filter_value_{number}", None),
-            ]
-        )
+    # Optimize: avoid regex and split by directly checking string patterns
+    append = redirect_params.append  # local binding is faster if used heavily
+    extend = redirect_params.extend
+    # Only process keys that start with '_filter_column_' and suffix is digit
+    for column_key in special_args:
+        if column_key.startswith('_filter_column_'):
+            suffix = column_key[15:]
+            if not suffix.isdigit():
+                continue
+            number = suffix
+            column = special_args[column_key]
+            op_key = f"_filter_op_{number}"
+            value_key = f"_filter_value_{number}"
+            op = special_args.get(op_key)
+            op = op if op is not None else "exact"
+            value = special_args.get(value_key)
+            value = value if value is not None else ""
+            if "__" in op:
+                op, value = op.split("__", 1)
+            if column:
+                append((f"{column}__{op}", value))
+            # Extends 3 elements at once, localizes extend
+            extend([
+                (column_key, None),
+                (op_key, None),
+                (value_key, None)
+            ])
     return redirect_params
 
 
