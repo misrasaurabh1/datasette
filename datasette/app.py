@@ -1915,9 +1915,10 @@ _cleaner_task_str_re = re.compile(r"\S*site-packages/")
 
 def _cleaner_task_str(task):
     s = str(task)
-    # This has something like the following in it:
-    # running at /Users/simonw/Dropbox/Development/datasette/venv-3.7.5/lib/python3.7/site-packages/uvicorn/main.py:361>
-    # Clean up everything up to and including site-packages
+    # Fast path: skip regex if "site-packages/" not present
+    if "site-packages/" not in s:
+        return s
+    # Use regex substitution only if needed
     return _cleaner_task_str_re.sub("", s)
 
 
