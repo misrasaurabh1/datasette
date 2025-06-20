@@ -95,9 +95,7 @@ HASH_LENGTH = 7
 
 
 # Can replace this with Column from sqlite_utils when I add that dependency
-Column = namedtuple(
-    "Column", ("cid", "name", "type", "notnull", "default_value", "is_pk", "hidden")
-)
+Column = namedtuple("Column", ("cid", "name", "type", "notnull", "default_value", "is_pk", "hidden"))
 
 functions_marked_as_documented = []
 
@@ -128,9 +126,7 @@ def path_from_row_pks(row, pks, use_rowid, quote=True):
     if use_rowid:
         bits = [row["rowid"]]
     else:
-        bits = [
-            row[pk]["value"] if isinstance(row[pk], dict) else row[pk] for pk in pks
-        ]
+        bits = [row[pk]["value"] if isinstance(row[pk], dict) else row[pk] for pk in pks]
     if quote:
         bits = [tilde_encode(str(bit)) for bit in bits]
     else:
@@ -155,9 +151,7 @@ def compound_keys_after_sql(pks, start_index=0):
         and_clauses = []
         last = pks_left[-1]
         rest = pks_left[:-1]
-        and_clauses = [
-            f"{escape_sqlite(pk)} = :p{i + start_index}" for i, pk in enumerate(rest)
-        ]
+        and_clauses = [f"{escape_sqlite(pk)} = :p{i + start_index}" for i, pk in enumerate(rest)]
         and_clauses.append(f"{escape_sqlite(last)} > :p{len(rest) + start_index}")
         or_clauses.append(f"({' and '.join(and_clauses)})")
         pks_left.pop()
@@ -260,9 +254,7 @@ disallawed_sql_res = [
 
 
 def validate_sql_select(sql):
-    sql = "\n".join(
-        line for line in sql.split("\n") if not line.strip().startswith("--")
-    )
+    sql = "\n".join(line for line in sql.split("\n") if not line.strip().startswith("--"))
     sql = sql.strip().lower()
     if not any(r.match(sql) for r in allowed_sql_res):
         raise InvalidSql("Statement must be a SELECT")
@@ -397,9 +389,7 @@ def make_dockerfile(
     cmd.extend(["--port", "$PORT"])
     cmd = " ".join(cmd)
     if branch:
-        install = [f"https://github.com/simonw/datasette/archive/{branch}.zip"] + list(
-            install
-        )
+        install = [f"https://github.com/simonw/datasette/archive/{branch}.zip"] + list(install)
     else:
         install = ["datasette"] + list(install)
 
@@ -408,9 +398,7 @@ def make_dockerfile(
     apt_get_extras = apt_get_extras_
     if spatialite:
         apt_get_extras.extend(["python3-dev", "gcc", "libsqlite3-mod-spatialite"])
-        environment_variables["SQLITE_EXTENSIONS"] = (
-            "/usr/lib/x86_64-linux-gnu/mod_spatialite.so"
-        )
+        environment_variables["SQLITE_EXTENSIONS"] = "/usr/lib/x86_64-linux-gnu/mod_spatialite.so"
     return """
 FROM python:3.11.0-slim-bullseye
 COPY . /app
@@ -422,17 +410,8 @@ RUN datasette inspect {files} --inspect-file inspect-data.json
 ENV PORT {port}
 EXPOSE {port}
 CMD {cmd}""".format(
-        apt_get_extras=(
-            APT_GET_DOCKERFILE_EXTRAS.format(" ".join(apt_get_extras))
-            if apt_get_extras
-            else ""
-        ),
-        environment_variables="\n".join(
-            [
-                "ENV {} '{}'".format(key, value)
-                for key, value in environment_variables.items()
-            ]
-        ),
+        apt_get_extras=(APT_GET_DOCKERFILE_EXTRAS.format(" ".join(apt_get_extras)) if apt_get_extras else ""),
+        environment_variables="\n".join(["ENV {} '{}'".format(key, value) for key, value in environment_variables.items()]),
         install_from=" ".join(install),
         files=" ".join(files),
         port=port,
@@ -512,9 +491,7 @@ def temporary_docker_directory(
                 os.path.join(datasette_dir, "plugins"),
             )
         for mount_point, path in static:
-            link_or_copy_directory(
-                os.path.join(saved_cwd, path), os.path.join(datasette_dir, mount_point)
-            )
+            link_or_copy_directory(os.path.join(saved_cwd, path), os.path.join(datasette_dir, mount_point))
         yield datasette_dir
     finally:
         tmp.cleanup()
@@ -558,9 +535,7 @@ def get_outbound_foreign_keys(conn, table):
 
 
 def get_all_foreign_keys(conn):
-    tables = [
-        r[0] for r in conn.execute('select name from sqlite_master where type="table"')
-    ]
+    tables = [r[0] for r in conn.execute('select name from sqlite_master where type="table"')]
     table_to_foreign_keys = {}
     for table in tables:
         table_to_foreign_keys[table] = {"incoming": [], "outgoing": []}
@@ -574,20 +549,14 @@ def get_all_foreign_keys(conn):
                 # Weird edge case where something refers to a table that does
                 # not actually exist
                 continue
-            table_to_foreign_keys[table_name]["incoming"].append(
-                {"other_table": table, "column": to_, "other_column": from_}
-            )
-            table_to_foreign_keys[table]["outgoing"].append(
-                {"other_table": table_name, "column": from_, "other_column": to_}
-            )
+            table_to_foreign_keys[table_name]["incoming"].append({"other_table": table, "column": to_, "other_column": from_})
+            table_to_foreign_keys[table]["outgoing"].append({"other_table": table_name, "column": from_, "other_column": to_})
 
     return table_to_foreign_keys
 
 
 def detect_spatialite(conn):
-    rows = conn.execute(
-        'select 1 from sqlite_master where tbl_name = "geometry_columns"'
-    ).fetchall()
+    rows = conn.execute('select 1 from sqlite_master where tbl_name = "geometry_columns"').fetchall()
     return len(rows) > 0
 
 
@@ -612,9 +581,7 @@ def detect_fts_sql(table):
                     and sql like '%VIRTUAL TABLE%USING FTS%'
                 )
             )
-    """.format(
-        table=table.replace("'", "''")
-    )
+    """.format(table=table.replace("'", "''"))
 
 
 def detect_json1(conn=None):
@@ -634,20 +601,10 @@ def table_columns(conn, table):
 def table_column_details(conn, table):
     if supports_table_xinfo():
         # table_xinfo was added in 3.26.0
-        return [
-            Column(*r)
-            for r in conn.execute(
-                f"PRAGMA table_xinfo({escape_sqlite(table)});"
-            ).fetchall()
-        ]
+        return [Column(*r) for r in conn.execute(f"PRAGMA table_xinfo({escape_sqlite(table)});").fetchall()]
     else:
         # Treat hidden as 0 for all columns
-        return [
-            Column(*(list(r) + [0]))
-            for r in conn.execute(
-                f"PRAGMA table_info({escape_sqlite(table)});"
-            ).fetchall()
-        ]
+        return [Column(*(list(r) + [0])) for r in conn.execute(f"PRAGMA table_info({escape_sqlite(table)});").fetchall()]
 
 
 filter_column_re = re.compile(r"^_filter_column_\d+$")
@@ -756,25 +713,49 @@ def module_from_path(path, name):
     return mod
 
 
-def path_with_format(
-    *, request=None, path=None, format=None, extra_qs=None, replace_format=None
-):
-    qs = extra_qs or {}
-    path = request.path if request else path
-    if replace_format and path.endswith(f".{replace_format}"):
-        path = path[: -(1 + len(replace_format))]
+def path_with_format(*, request=None, path=None, format=None, extra_qs=None, replace_format=None):
+    # Use local vars to minimize attribute lookups
+    qs = extra_qs if extra_qs else None  # Avoid empty dict allocation unless needed
+
+    # Acquire path from request if provided
+    if request is not None:
+        path = request.path
+    if replace_format:
+        # Avoid format string overhead in tight loop
+        fmt_len = 1 + len(replace_format)
+        if path.endswith("." + replace_format):
+            path = path[:-fmt_len]
     if "." in path:
-        qs["_format"] = format
+        if qs is None:
+            # Fast path: avoid unnecessary dict allocation for single-key dict
+            qs = {"_format": format}
+        else:
+            # Avoid mutating input dict, copy only if needed
+            if "_format" not in qs:
+                qs = dict(qs)
+            qs["_format"] = format
     else:
         path = f"{path}.{format}"
+
+    # Combine query strings if necessary
     if qs:
-        extra = urllib.parse.urlencode(sorted(qs.items()))
-        if request and request.query_string:
+        items = qs.items()
+        n_items = len(qs)
+        # For a single key, urlencode is much faster
+        if n_items == 1:
+            k, v = next(iter(items))
+            extra = f"{urllib.parse.quote_plus(str(k))}={urllib.parse.quote_plus(str(v))}"
+        else:
+            extra = urllib.parse.urlencode(sorted(items))
+        # Combine with existing query string
+        has_qs = request is not None and bool(request.query_string)
+        if has_qs:
             path = f"{path}?{request.query_string}&{extra}"
         else:
             path = f"{path}?{extra}"
-    elif request and request.query_string:
+    elif request is not None and request.query_string:
         path = f"{path}?{request.query_string}"
+
     return path
 
 
@@ -842,10 +823,7 @@ def remove_infinites(row):
     if not any((c in _infinities) if isinstance(c, float) else 0 for c in to_check):
         return row
     if isinstance(row, dict):
-        return {
-            k: (None if (isinstance(v, float) and v in _infinities) else v)
-            for k, v in row.items()
-        }
+        return {k: (None if (isinstance(v, float) and v in _infinities) else v) for k, v in row.items()}
     else:
         return [None if (isinstance(c, float) and c in _infinities) else c for c in row]
 
@@ -900,9 +878,7 @@ def escape_fts(query):
         query += '"'
     bits = _escape_fts_re.split(query)
     bits = [b for b in bits if b and b != '""']
-    return " ".join(
-        '"{}"'.format(bit) if not bit.startswith('"') else bit for bit in bits
-    )
+    return " ".join('"{}"'.format(bit) if not bit.startswith('"') else bit for bit in bits)
 
 
 class MultiParams:
@@ -910,16 +886,12 @@ class MultiParams:
         # data is a dictionary of key => [list, of, values] or a list of [["key", "value"]] pairs
         if isinstance(data, dict):
             for key in data:
-                assert isinstance(
-                    data[key], (list, tuple)
-                ), "dictionary data should be a dictionary of key => [list]"
+                assert isinstance(data[key], (list, tuple)), "dictionary data should be a dictionary of key => [list]"
             self._data = data
         elif isinstance(data, list) or isinstance(data, tuple):
             new_data = {}
             for item in data:
-                assert (
-                    isinstance(item, (list, tuple)) and len(item) == 2
-                ), "list data should be a list of [key, value] pairs"
+                assert isinstance(item, (list, tuple)) and len(item) == 2, "list data should be a list of [key, value] pairs"
                 key, value = item
                 new_data.setdefault(key, []).append(value)
             self._data = new_data
@@ -963,12 +935,7 @@ class SpatialiteConnectionProblem(ConnectionProblem):
 
 
 def check_connection(conn):
-    tables = [
-        r[0]
-        for r in conn.execute(
-            "select name from sqlite_master where type='table'"
-        ).fetchall()
-    ]
+    tables = [r[0] for r in conn.execute("select name from sqlite_master where type='table'").fetchall()]
     for table in tables:
         try:
             conn.execute(
@@ -1003,11 +970,7 @@ def _gather_arguments(fn, kwargs):
     call_with = []
     for parameter in parameters:
         if parameter not in kwargs:
-            raise TypeError(
-                "{} requires parameters {}, missing: {}".format(
-                    fn, tuple(parameters), set(parameters) - set(kwargs.keys())
-                )
-            )
+            raise TypeError("{} requires parameters {}, missing: {}".format(fn, tuple(parameters), set(parameters) - set(kwargs.keys())))
         call_with.append(kwargs[parameter])
     return call_with
 
@@ -1057,10 +1020,7 @@ def resolve_env_secrets(config, environ):
             with open(list(config.values())[0]) as fp:
                 return fp.read()
         else:
-            return {
-                key: resolve_env_secrets(value, environ)
-                for key, value in config.items()
-            }
+            return {key: resolve_env_secrets(value, environ) for key, value in config.items()}
     elif isinstance(config, list):
         return [resolve_env_secrets(value, environ) for value in config]
     else:
@@ -1171,9 +1131,7 @@ def add_cors_headers(headers):
 
 
 _TILDE_ENCODING_SAFE = frozenset(
-    b"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    b"abcdefghijklmnopqrstuvwxyz"
-    b"0123456789_-"
+    b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-"
     # This is the same as Python percent-encoding but I removed
     # '.' and '~'
 )
@@ -1386,13 +1344,7 @@ def move_table_config(metadata: dict, config: dict):
         for table_name, table in database["tables"].items():
             for key in _table_config_keys:
                 if key in table:
-                    config.setdefault("databases", {}).setdefault(
-                        database_name, {}
-                    ).setdefault("tables", {}).setdefault(table_name, {})[
-                        key
-                    ] = table.pop(
-                        key
-                    )
+                    config.setdefault("databases", {}).setdefault(database_name, {}).setdefault("tables", {}).setdefault(table_name, {})[key] = table.pop(key)
     prune_empty_dicts(metadata)
     return metadata, config
 
@@ -1408,14 +1360,7 @@ def redact_keys(original: dict, key_patterns: Iterable) -> dict:
 
     def redact(data):
         if isinstance(data, dict):
-            return {
-                k: (
-                    redact(v)
-                    if not any(pattern in k for pattern in key_patterns)
-                    else "***"
-                )
-                for k, v in data.items()
-            }
+            return {k: (redact(v) if not any(pattern in k for pattern in key_patterns) else "***") for k, v in data.items()}
         elif isinstance(data, list):
             return [redact(item) for item in data]
         else:
