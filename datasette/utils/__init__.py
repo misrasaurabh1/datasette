@@ -1330,31 +1330,38 @@ def move_plugins_and_allow(source: dict, destination: dict) -> Tuple[dict, dict]
     hierarchy in destination if needed. After moving, recursively remove any keys
     in the source that are left empty.
     """
-    source = copy.deepcopy(source)
-    destination = copy.deepcopy(destination)
+    # Fastest way to shallow-copy nested dict structure is recursively
+    # (to avoid deep-copying values that are not dicts, only dict structure)
+    def _shallow_dict(d):
+        out = {}
+        for k, v in d.items():
+            out[k] = _shallow_dict(v) if isinstance(v, dict) else v
+        return out
+    
+    source = _shallow_dict(source)
+    destination = _shallow_dict(destination)
 
-    def recursive_move(src, dest, path=None):
-        if path is None:
-            path = []
-        for key, value in list(src.items()):
-            new_path = path + [key]
-            if key in ("plugins", "allow"):
-                # Navigate and create the hierarchy in destination if needed
+    # Instead of a second recursion for pruning, maintain a stack of parent dicts and their keys to prune
+    def recursive_move_and_prune(src, dest, path):
+        keys_to_delete = []
+        for key in list(src.keys()):  # avoid list(d.items()) and tuple unpack for speed
+            value = src[key]
+            if key == "plugins" or key == "allow":
                 d = dest
                 for step in path:
                     d = d.setdefault(step, {})
-                # Move the plugins
                 d[key] = value
-                # Remove the plugins from source
-                src.pop(key, None)
+                keys_to_delete.append(key)
             elif isinstance(value, dict):
-                recursive_move(value, dest, new_path)
-                # After moving, check if the current dictionary is empty and remove it if so
-                if not value:
-                    src.pop(key, None)
+                recursive_move_and_prune(value, dest, path + (key,))
+                if not value:  # Only prune if now empty (from recursion)
+                    keys_to_delete.append(key)
+        for key in keys_to_delete:
+            src.pop(key, None)
 
-    recursive_move(source, destination)
-    prune_empty_dicts(source)
+    # Use tuple for path for lower overhead than lists
+    recursive_move_and_prune(source, destination, ())
+
     return source, destination
 
 
