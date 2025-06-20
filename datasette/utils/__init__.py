@@ -24,6 +24,7 @@ import urllib
 import yaml
 from .shutil_backport import copytree
 from .sqlite import sqlite3, supports_table_xinfo
+import urllib.parse
 
 if typing.TYPE_CHECKING:
     from datasette.database import Database
@@ -297,28 +298,40 @@ def path_with_removed_args(request, args, path=None):
     if path is None:
         path = request.path
     else:
-        if "?" in path:
-            bits = path.split("?", 1)
-            path, query_string = bits
-    # args can be a dict or a set
+        q_idx = path.find("?")
+        if q_idx != -1:
+            path, query_string = path[:q_idx], path[q_idx+1:]
+
+    # Shortcut for empty args
+    if not args:
+        if query_string:
+            return path + "?" + query_string
+        return path
+
+    parse_qsl = urllib.parse.parse_qsl
+    urlencode = urllib.parse.urlencode
+    append = list.append
+
+    # Prepare type-specific removal logic
+    is_set = isinstance(args, set)
+    is_dict = isinstance(args, dict)
+
     current = []
-    if isinstance(args, set):
+    for key, value in parse_qsl(query_string):
+        if is_set:
+            if key not in args:
+                append(current, (key, value))
+        elif is_dict:
+            if args.get(key) != value:
+                append(current, (key, value))
+        else:
+            append(current, (key, value))  # If args is not a set/dict, ignore
 
-        def should_remove(key, value):
-            return key in args
-
-    elif isinstance(args, dict):
-        # Must match key AND value
-        def should_remove(key, value):
-            return args.get(key) == value
-
-    for key, value in urllib.parse.parse_qsl(query_string):
-        if not should_remove(key, value):
-            current.append((key, value))
-    query_string = urllib.parse.urlencode(current)
-    if query_string:
-        query_string = f"?{query_string}"
-    return path + query_string
+    if current:
+        query_string = "?" + urlencode(current)
+        return path + query_string
+    else:
+        return path
 
 
 def path_with_replaced_args(request, args, path=None):
