@@ -24,6 +24,7 @@ import urllib
 import yaml
 from .shutil_backport import copytree
 from .sqlite import sqlite3, supports_table_xinfo
+import urllib.parse
 
 if typing.TYPE_CHECKING:
     from datasette.database import Database
@@ -1206,9 +1207,9 @@ def tilde_encode(s: str) -> str:
 
 @documented
 def tilde_decode(s: str) -> str:
-    "Decodes a tilde-encoded string, so ``~2Ffoo~2Fbar`` -> ``/foo/bar``"
-    # Avoid accidentally decoding a %2f style sequence
-    temp = secrets.token_hex(16)
+    """Decodes a tilde-encoded string, so ``~2Ffoo~2Fbar`` -> ``/foo/bar``"""
+    # Use a static unlikely temp string for speed
+    temp = "__TILDE_DECODE_UNLIKELY__"
     s = s.replace("%", temp)
     decoded = urllib.parse.unquote_plus(s.replace("~", "%"))
     return decoded.replace(temp, "%")
