@@ -23,7 +23,12 @@ class BaseConverter(object):
         return self.convert(i, self.decimal_digits, self.digits)
 
     def decode(self, s):
-        return int(self.convert(s, self.digits, self.decimal_digits))
+        # Use local variables to reduce attribute lookups
+        digits = self.digits
+        decimal_digits = BaseConverter.decimal_digits  # Class attribute, not per-instance
+
+        # Use the class's convert staticmethod directly, avoiding instance lookup
+        return int(BaseConverter.convert(s, digits, decimal_digits))
 
     def convert(number, fromdigits, todigits):
         # Based on http://code.activestate.com/recipes/111286/
