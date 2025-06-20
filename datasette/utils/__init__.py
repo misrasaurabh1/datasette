@@ -898,11 +898,17 @@ def escape_fts(query):
     # If query has unbalanced ", add one at end
     if query.count('"') % 2:
         query += '"'
-    bits = _escape_fts_re.split(query)
-    bits = [b for b in bits if b and b != '""']
-    return " ".join(
-        '"{}"'.format(bit) if not bit.startswith('"') else bit for bit in bits
-    )
+
+    # Single pass: filter and decorate output at once for best cache/memory usage
+    result = []
+    for bit in _escape_fts_re.split(query):
+        if not bit or bit == '""':
+            continue
+        if bit.startswith('"'):
+            result.append(bit)
+        else:
+            result.append(f'"{bit}"')
+    return " ".join(result)
 
 
 class MultiParams:
