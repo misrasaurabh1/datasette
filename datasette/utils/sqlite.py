@@ -20,15 +20,7 @@ def sqlite_version():
 
 
 def _sqlite_version():
-    return tuple(
-        map(
-            int,
-            sqlite3.connect(":memory:")
-            .execute("select sqlite_version()")
-            .fetchone()[0]
-            .split("."),
-        )
-    )
+    return tuple(map(int, sqlite3.sqlite_version.split(".")))
 
 
 def supports_table_xinfo():
