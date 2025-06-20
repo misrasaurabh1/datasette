@@ -45,6 +45,7 @@ from datasette.filters import Filters
 import sqlite_utils
 from .base import BaseView, DatasetteError, _error, stream_csv
 from .database import QueryView
+from itertools import chain
 
 LINK_WITH_LABEL = (
     '<a href="{base_url}{database}/{table}/{link_id}">{label}</a>&nbsp;<em>{id}</em>'
@@ -669,10 +670,8 @@ class TableDropView(BaseView):
 
 def _get_extras(request):
     extra_bits = request.args.getlist("_extra")
-    extras = set()
-    for bit in extra_bits:
-        extras.update(bit.split(","))
-    return extras
+    # Directly chain all split lists and convert to set for a single pass
+    return set(chain.from_iterable(bit.split(",") for bit in extra_bits))
 
 
 async def _columns_to_select(table_columns, pks, request):
