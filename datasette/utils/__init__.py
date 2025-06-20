@@ -618,13 +618,17 @@ def detect_fts_sql(table):
 
 
 def detect_json1(conn=None):
+    # Fast path: use cache by connection class
+    klass = type(conn) if conn is not None else sqlite3.Connection
+    if klass in _json1_available_cache:
+        return _json1_available_cache[klass]
+
     if conn is None:
         conn = sqlite3.connect(":memory:")
-    try:
-        conn.execute("SELECT json('{}')")
-        return True
-    except Exception:
-        return False
+
+    result = _has_json1(conn)
+    _json1_available_cache[klass] = result
+    return result
 
 
 def table_columns(conn, table):
@@ -1460,3 +1464,12 @@ def deep_dict_update(dict1, dict2):
         else:
             dict1[key] = value
     return dict1
+
+def _has_json1(conn):
+    try:
+        conn.execute("SELECT json('{}')")
+        return True
+    except Exception:
+        return False
+
+_json1_available_cache = {}
