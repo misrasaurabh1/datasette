@@ -836,18 +836,23 @@ _infinities = {float("inf"), float("-inf")}
 
 
 def remove_infinites(row):
-    to_check = row
+    # Fast-path: pre-fetch _infinities, and minimize isinstance calls
+    infs = _infinities
     if isinstance(row, dict):
-        to_check = row.values()
-    if not any((c in _infinities) if isinstance(c, float) else 0 for c in to_check):
+        vals = row.values()
+        # Short-circuit: avoid list comprehension unless necessary
+        for v in vals:
+            if type(v) is float and v in infs:
+                # Only build new dict if any infinites found
+                return {k: (None if type(v) is float and v in infs else v) for k, v in row.items()}
         return row
-    if isinstance(row, dict):
-        return {
-            k: (None if (isinstance(v, float) and v in _infinities) else v)
-            for k, v in row.items()
-        }
     else:
-        return [None if (isinstance(c, float) and c in _infinities) else c for c in row]
+        # row is assumed iterable of values (list or tuple)
+        for c in row:
+            if type(c) is float and c in infs:
+                # Build new list only if any infinites found
+                return [None if type(c) is float and c in infs else c for c in row]
+        return row
 
 
 class StaticMount(click.ParamType):
