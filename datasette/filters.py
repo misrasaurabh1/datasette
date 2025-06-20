@@ -203,15 +203,22 @@ class TemplatedFilter(Filter):
         self.no_argument = no_argument
 
     def where_clause(self, table, column, value, param_counter):
-        converted = self.format.format(value)
-        if self.numeric and converted.isdigit():
+        # Cache self attributes to local variables (faster attribute access)
+        fmt = self.format
+        numeric = self.numeric
+        no_argument = self.no_argument
+        sql_template = self.sql_template
+
+        converted = fmt.format(value)
+        if numeric and converted.isdigit():
             converted = int(converted)
-        if self.no_argument:
-            kwargs = {"c": column}
-            converted = None
+        if no_argument:
+            # No argument case: use preformatted string, avoid dict
+            return sql_template.format(c=column), None
         else:
-            kwargs = {"c": column, "p": f"p{param_counter}", "t": table}
-        return self.sql_template.format(**kwargs), converted
+            pstr = f"p{param_counter}"
+            # Only build the dict once
+            return sql_template.format(c=column, p=pstr, t=table), converted
 
     def human_clause(self, column, value):
         if callable(self.human_template):
