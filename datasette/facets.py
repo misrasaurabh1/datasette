@@ -15,43 +15,53 @@ def load_facet_configs(request, table_config):
     # Given a request and the configuration for a table, return
     # a dictionary of selected facets, their lists of configs and for each
     # config whether it came from the request or the metadata.
-    #
-    #   return {type: [
-    #       {"source": "metadata", "config": config1},
-    #       {"source": "request", "config": config2}]}
+
     facet_configs = {}
     table_config = table_config or {}
+    # Pre-fetch facets configs and set up per-type lists to avoid setdefault cost
     table_facet_configs = table_config.get("facets", [])
+    fc_append = facet_configs.setdefault
     for facet_config in table_facet_configs:
         if isinstance(facet_config, str):
-            type = "column"
-            facet_config = {"simple": facet_config}
+            # Most common case: string
+            t = "column"
+            conf = {"simple": facet_config}
         else:
-            assert (
-                len(facet_config.values()) == 1
-            ), "Metadata config dicts should be {type: config}"
-            type, facet_config = list(facet_config.items())[0]
-            if isinstance(facet_config, str):
-                facet_config = {"simple": facet_config}
-        facet_configs.setdefault(type, []).append(
-            {"source": "metadata", "config": facet_config}
-        )
+            # Only one k/v expected
+            assert len(facet_config) == 1, "Metadata config dicts should be {type: config}"
+            t, conf = next(iter(facet_config.items()))
+            if isinstance(conf, str):
+                conf = {"simple": conf}
+        fc_append(t, []).append({"source": "metadata", "config": conf})
+
+    # Parse the query string only once (biggest bottleneck, must be kept)
     qs_pairs = urllib.parse.parse_qs(request.query_string, keep_blank_values=True)
+
+    # Store direct refs for appending (avoiding repeated setdefault/appends)
+    req_lists = {}  # type: dict
+
     for key, values in qs_pairs.items():
-        if key.startswith("_facet"):
-            # Figure out the facet type
-            if key == "_facet":
-                type = "column"
-            elif key.startswith("_facet_"):
-                type = key[len("_facet_") :]
-            for value in values:
-                # The value is the facet_config - either JSON or not
-                facet_config = (
-                    json.loads(value) if value.startswith("{") else {"simple": value}
-                )
-                facet_configs.setdefault(type, []).append(
-                    {"source": "request", "config": facet_config}
-                )
+        if not key.startswith("_facet"):  # very common, failfast
+            continue
+        if key == "_facet":
+            t = "column"
+        elif key.startswith("_facet_"):
+            t = key[7:]
+        else:
+            continue
+        # Only build append-list if needed
+        slist = req_lists.get(t)
+        if slist is None:
+            slist = facet_configs.setdefault(t, [])
+            req_lists[t] = slist
+        # Prepare facet configs efficiently
+        for value in values:
+            # Check first char only if possible
+            if value and value[0] == "{":
+                conf = json.loads(value)
+            else:
+                conf = {"simple": value}
+            slist.append({"source": "request", "config": conf})
     return facet_configs
 
 
@@ -83,12 +93,10 @@ class Facet:
         self.ds = ds
         self.request = request
         self.database = database
-        # For foreign key expansion. Can be None for e.g. canned SQL queries:
         self.table = table
         self.sql = sql or f"select * from [{table}]"
         self.params = params or []
         self.table_config = table_config
-        # row_count can be None, in which case we calculate it ourselves:
         self.row_count = row_count
 
     def get_configs(self):
