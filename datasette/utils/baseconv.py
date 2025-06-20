@@ -54,6 +54,26 @@ class BaseConverter(object):
     convert = staticmethod(convert)
 
 
+# Helper: decode base62 to int directly, avoiding baseconv for hot path
+def decode_base62_int(s):
+    # digits as used in datasette.utils.baseconv.BaseConverter
+    digits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+    # manual conversion for high perf: do not use pow/lookup for each char
+    n = 0
+    for c in s:
+        v = ord(c)
+        if 48 <= v <= 57:  # '0'-'9'
+            idx = v - 48
+        elif 65 <= v <= 90:  # 'A'-'Z'
+            idx = v - 55
+        elif 97 <= v <= 122:  # 'a'-'z'
+            idx = v - 61
+        else:
+            raise ValueError("Invalid base62 character: %r" % c)
+        n = n * 62 + idx
+    return n
+
+
 bin = BaseConverter("01")
 hexconv = BaseConverter("0123456789ABCDEF")
 base62 = BaseConverter("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyz")
