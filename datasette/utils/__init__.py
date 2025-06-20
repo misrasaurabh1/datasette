@@ -24,6 +24,7 @@ import urllib
 import yaml
 from .shutil_backport import copytree
 from .sqlite import sqlite3, supports_table_xinfo
+import urllib.parse
 
 if typing.TYPE_CHECKING:
     from datasette.database import Database
@@ -323,14 +324,20 @@ def path_with_removed_args(request, args, path=None):
 
 def path_with_replaced_args(request, args, path=None):
     path = path or request.path
-    if isinstance(args, dict):
-        args = args.items()
-    keys_to_replace = {p[0] for p in args}
+    # Convert args to a dict for O(1) lookup and update
+    if not isinstance(args, dict):
+        args = dict(args)
+    else:
+        # Avoid possible reference aliasing
+        args = dict(args)
     current = []
-    for key, value in urllib.parse.parse_qsl(request.query_string):
-        if key not in keys_to_replace:
+    # Fast parsing of query_string and direct update/remove
+    for key, value in urllib.parse.parse_qsl(request.query_string, keep_blank_values=True):
+        # Only keep those keys not being replaced *and* value isn't replaced with None
+        if key not in args:
             current.append((key, value))
-    current.extend([p for p in args if p[1] is not None])
+    # Add in all replacements where the value is not None
+    current.extend((k, v) for k, v in args.items() if v is not None)
     query_string = urllib.parse.urlencode(current)
     if query_string:
         query_string = f"?{query_string}"
