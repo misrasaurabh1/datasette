@@ -279,33 +279,24 @@ def restrictions_allow_action(
     action: str,
     resource: Union[str, Tuple[str, str]],
 ):
-    "Do these restrictions allow the requested action against the requested resource?"
+    """Do these restrictions allow the requested action against the requested resource?"""
     if action == "view-instance":
         # Special case for view-instance: it's allowed if the restrictions include any
         # permissions that have the implies_can_view=True flag set
-        all_rules = restrictions.get("a") or []
-        for database_rules in (restrictions.get("d") or {}).values():
-            all_rules += database_rules
-        for database_resource_rules in (restrictions.get("r") or {}).values():
-            for resource_rules in database_resource_rules.values():
-                all_rules += resource_rules
-        permissions = [datasette.get_permission(action) for action in all_rules]
-        if any(p for p in permissions if p.implies_can_view):
-            return True
+        all_rules = _gather_unique_rules_view_instance(restrictions)
+        for rule in all_rules:
+            p = datasette.get_permission(rule)
+            if p.implies_can_view:
+                return True
 
     if action == "view-database":
         # Special case for view-database: it's allowed if the restrictions include any
         # permissions that have the implies_can_view=True flag set AND takes_database
-        all_rules = restrictions.get("a") or []
-        database_rules = list((restrictions.get("d") or {}).get(resource) or [])
-        all_rules += database_rules
-        resource_rules = ((restrictions.get("r") or {}).get(resource) or {}).values()
-        for resource_rules in (restrictions.get("r") or {}).values():
-            for table_rules in resource_rules.values():
-                all_rules += table_rules
-        permissions = [datasette.get_permission(action) for action in all_rules]
-        if any(p for p in permissions if p.implies_can_view and p.takes_database):
-            return True
+        all_rules = _gather_unique_rules_view_database(restrictions, resource)
+        for rule in all_rules:
+            p = datasette.get_permission(rule)
+            if p.implies_can_view and p.takes_database:
+                return True
 
     # Does this action have an abbreviation?
     to_check = {action}
@@ -418,3 +409,33 @@ def skip_csrf(scope):
         headers = scope.get("headers") or {}
         if dict(headers).get(b"content-type") == b"application/json":
             return True
+
+
+def _gather_unique_rules_view_instance(restrictions):
+    # Collect all unique rules relevant for "view-instance" efficiently
+    rules = set(restrictions.get("a") or [])
+    for db_rules in (restrictions.get("d") or {}).values():
+        rules.update(db_rules)
+    for res_db_tables in (restrictions.get("r") or {}).values():
+        for resource_rules in res_db_tables.values():
+            rules.update(resource_rules)
+    return rules
+
+def _gather_unique_rules_view_database(restrictions, resource):
+    # Collect all unique rules relevant for "view-database" efficiently
+    rules = set(restrictions.get("a") or [])
+    # Try to pick up db rules for the specific database being viewed (resource param)
+    db_rules = []
+    if resource:
+        db_name = resource if isinstance(resource, str) else resource[0]
+        db_rules = (restrictions.get("d") or {}).get(db_name) or []
+    rules.update(db_rules)
+    # Rules for all tables within the specified database
+    res_db_tables = ((restrictions.get("r") or {}).get(resource) or {}) if resource else {}
+    for table_rules in res_db_tables.values():
+        rules.update(table_rules)
+    # All other resource-specific rules, in case some grant cross-db permission
+    for db_tables in (restrictions.get("r") or {}).values():
+        for table_rules in db_tables.values():
+            rules.update(table_rules)
+    return rules
