@@ -2,7 +2,6 @@ from datasette import hookimpl
 import click
 import json
 import os
-import re
 from subprocess import check_call, check_output
 
 from .common import (
@@ -22,9 +21,7 @@ def publish_subcommand(publish):
         default="datasette",
         help="Application name to use when building",
     )
-    @click.option(
-        "--service", default="", help="Cloud Run service to deploy (or over-write)"
-    )
+    @click.option("--service", default="", help="Cloud Run service to deploy (or over-write)")
     @click.option("--spatialite", is_flag=True, help="Enable SpatialLite extension")
     @click.option(
         "--show-files",
@@ -93,12 +90,8 @@ def publish_subcommand(publish):
         min_instances,
     ):
         "Publish databases to Datasette running on Cloud Run"
-        fail_if_publish_binary_not_installed(
-            "gcloud", "Google Cloud", "https://cloud.google.com/sdk/"
-        )
-        project = check_output(
-            "gcloud config get-value project", shell=True, universal_newlines=True
-        ).strip()
+        fail_if_publish_binary_not_installed("gcloud", "Google Cloud", "https://cloud.google.com/sdk/")
+        project = check_output("gcloud config get-value project", shell=True, universal_newlines=True).strip()
 
         if not service:
             # Show the user their current services, then prompt for one
@@ -109,11 +102,7 @@ def publish_subcommand(publish):
             if existing_services:
                 click.echo("Your existing services:\n")
                 for existing_service in existing_services:
-                    click.echo(
-                        "  {name} - created {created} - {url}".format(
-                            **existing_service
-                        )
-                    )
+                    click.echo("  {name} - created {created} - {url}".format(**existing_service))
                 click.echo("")
             service = click.prompt("Service name", type=str)
 
@@ -138,13 +127,9 @@ def publish_subcommand(publish):
         if plugin_secret:
             extra_metadata["plugins"] = {}
             for plugin_name, plugin_setting, setting_value in plugin_secret:
-                environment_variable = (
-                    f"{plugin_name}_{plugin_setting}".upper().replace("-", "_")
-                )
+                environment_variable = f"{plugin_name}_{plugin_setting}".upper().replace("-", "_")
                 environment_variables[environment_variable] = setting_value
-                extra_metadata["plugins"].setdefault(plugin_name, {})[
-                    plugin_setting
-                ] = {"$env": environment_variable}
+                extra_metadata["plugins"].setdefault(plugin_name, {})[plugin_setting] = {"$env": environment_variable}
 
         with temporary_docker_directory(
             files,
@@ -175,9 +160,7 @@ def publish_subcommand(publish):
 
             image_id = f"gcr.io/{project}/datasette-{service}"
             check_call(
-                "gcloud builds submit --tag {}{}".format(
-                    image_id, " --timeout {}".format(timeout) if timeout else ""
-                ),
+                "gcloud builds submit --tag {}{}".format(image_id, " --timeout {}".format(timeout) if timeout else ""),
                 shell=True,
             )
         extra_deploy_options = []
@@ -218,6 +201,19 @@ def get_existing_services():
 
 
 def _validate_memory(ctx, param, value):
-    if value and re.match(r"^\d+(Gi|G|Mi|M)$", value) is None:
-        raise click.BadParameter("--memory should be a number then Gi/G/Mi/M e.g 1Gi")
+    if value:
+        l = len(value)
+        # Must end with one of these units and have at least one digit before
+        if l < 2:
+            raise click.BadParameter("--memory should be a number then Gi/G/Mi/M e.g 1Gi")
+        unit = value[-2:]
+        if unit in {"Gi", "Mi"}:
+            num_part = value[:-2]
+        elif value[-1] in {"G", "M"}:
+            unit = value[-1]
+            num_part = value[:-1]
+        else:
+            raise click.BadParameter("--memory should be a number then Gi/G/Mi/M e.g 1Gi")
+        if not num_part.isdigit() or not num_part:
+            raise click.BadParameter("--memory should be a number then Gi/G/Mi/M e.g 1Gi")
     return value
