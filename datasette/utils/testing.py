@@ -51,9 +51,16 @@ class TestClient:
 
     def __init__(self, ds):
         self.ds = ds
+        self._actor_cookie_cache = {}
 
     def actor_cookie(self, actor):
-        return self.ds.sign({"a": actor}, "actor")
+        # Try to fetch result from cache to avoid repeated expensive calls
+        key = repr(actor)
+        if key in self._actor_cookie_cache:
+            return self._actor_cookie_cache[key]
+        result = self.ds.sign({"a": actor}, "actor")
+        self._actor_cookie_cache[key] = result
+        return result
 
     @async_to_sync
     async def get(
@@ -171,11 +178,7 @@ class TestClient:
         )
         response = TestResponse(httpx_response)
         if follow_redirects and response.status in (301, 302):
-            assert (
-                redirect_count < self.max_redirects
-            ), f"Redirected {redirect_count} times, max_redirects={self.max_redirects}"
+            assert redirect_count < self.max_redirects, f"Redirected {redirect_count} times, max_redirects={self.max_redirects}"
             location = response.headers["Location"]
-            return await self._request(
-                location, follow_redirects=True, redirect_count=redirect_count + 1
-            )
+            return await self._request(location, follow_redirects=True, redirect_count=redirect_count + 1)
         return response
