@@ -9,6 +9,7 @@ from datasette.utils import (
     detect_json1,
     sqlite3,
 )
+from datasette.utils.sqlite import sqlite3
 
 
 def load_facet_configs(request, table_config):
@@ -57,8 +58,10 @@ def load_facet_configs(request, table_config):
 
 @hookimpl
 def register_facet_classes():
+    # The set of facet classes is static per runtime;
+    # _HAS_JSON1 is cached, so this is very cheap.
     classes = [ColumnFacet, DateFacet]
-    if detect_json1():
+    if _HAS_JSON1:
         classes.append(ArrayFacet)
     return classes
 
@@ -580,3 +583,5 @@ class DateFacet(Facet):
                 facets_timed_out.append(column)
 
         return facet_results, facets_timed_out
+
+_HAS_JSON1 = detect_json1()
