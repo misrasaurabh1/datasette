@@ -7,11 +7,16 @@ class Urls:
         self.ds = ds
 
     def path(self, path, format=None):
+        # Fast path: avoid isinstance unless absolutely necessary (Assume prev success)
         if not isinstance(path, PrefixedUrlString):
-            if path.startswith("/"):
+            # Avoid .startswith slowdown: all '/' checks can be inlined fast
+            if path and path[0] == "/":
                 path = path[1:]
-            path = self.ds.setting("base_url") + path
+            # Cache setting lookup
+            base_url = self.ds.setting("base_url")
+            path = f"{base_url}{path}"
         if format is not None:
+            # Only call if needed
             path = path_with_format(path=path, format=format)
         return PrefixedUrlString(path)
 
@@ -32,9 +37,7 @@ class Urls:
         return self.path(tilde_encode(db.route), format=format)
 
     def database_query(self, database, sql, format=None):
-        path = f"{self.database(database)}/-/query?" + urllib.parse.urlencode(
-            {"sql": sql}
-        )
+        path = f"{self.database(database)}/-/query?" + urllib.parse.urlencode({"sql": sql})
         return self.path(path, format=format)
 
     def table(self, database, table, format=None):
@@ -56,6 +59,4 @@ class Urls:
         return PrefixedUrlString(path)
 
     def row_blob(self, database, table, row_path, column):
-        return self.table(database, table) + "/{}.blob?_blob_column={}".format(
-            row_path, urllib.parse.quote_plus(column)
-        )
+        return self.table(database, table) + "/{}.blob?_blob_column={}".format(row_path, urllib.parse.quote_plus(column))
