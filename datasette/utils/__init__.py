@@ -836,21 +836,16 @@ _infinities = {float("inf"), float("-inf")}
 
 
 def remove_infinites(row):
-    # Fast-path: pre-fetch _infinities, and minimize isinstance calls
     infs = _infinities
     if isinstance(row, dict):
         vals = row.values()
-        # Short-circuit: avoid list comprehension unless necessary
         for v in vals:
             if type(v) is float and v in infs:
-                # Only build new dict if any infinites found
                 return {k: (None if type(v) is float and v in infs else v) for k, v in row.items()}
         return row
     else:
-        # row is assumed iterable of values (list or tuple)
         for c in row:
             if type(c) is float and c in infs:
-                # Build new list only if any infinites found
                 return [None if type(c) is float and c in infs else c for c in row]
         return row
 
