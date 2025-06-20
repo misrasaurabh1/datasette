@@ -119,6 +119,9 @@ async def await_me_maybe(value: typing.Any) -> typing.Any:
 
 def urlsafe_components(token):
     """Splits token on commas and tilde-decodes each component"""
+    # Fast path for trivial (single-part, no tildes, no %)
+    if "," not in token and "~" not in token and "%" not in token and "+" not in token:
+        return [token]
     return [tilde_decode(b) for b in token.split(",")]
 
 
@@ -1206,12 +1209,19 @@ def tilde_encode(s: str) -> str:
 
 @documented
 def tilde_decode(s: str) -> str:
-    "Decodes a tilde-encoded string, so ``~2Ffoo~2Fbar`` -> ``/foo/bar``"
-    # Avoid accidentally decoding a %2f style sequence
-    temp = secrets.token_hex(16)
-    s = s.replace("%", temp)
-    decoded = urllib.parse.unquote_plus(s.replace("~", "%"))
-    return decoded.replace(temp, "%")
+    """Decodes a tilde-encoded string, so ``~2Ffoo~2Fbar`` -> ``/foo/bar``"""
+    # Fast path, nothing to decode
+    if "~" not in s and "%" not in s and "+" not in s:
+        return s
+    # Avoid accidental decoding of %2F
+    temp = _TILDE_DECODE_TEMP
+    if "%" in s:
+        s = s.replace("%", temp)
+        decoded = urllib.parse.unquote_plus(s.replace("~", "%"))
+        return decoded.replace(temp, "%")
+    else:
+        decoded = urllib.parse.unquote_plus(s.replace("~", "%"))
+        return decoded
 
 
 def resolve_routes(routes, path):
@@ -1460,3 +1470,5 @@ def deep_dict_update(dict1, dict2):
         else:
             dict1[key] = value
     return dict1
+
+_TILDE_DECODE_TEMP = "___TILDE_DECODE_TEMP___"
