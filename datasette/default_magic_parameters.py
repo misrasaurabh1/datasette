@@ -26,10 +26,7 @@ def now(key, request):
     elif key == "date_utc":
         return datetime.datetime.now(datetime.timezone.utc).date().isoformat()
     elif key == "datetime_utc":
-        return (
-            datetime.datetime.now(datetime.timezone.utc).strftime(r"%Y-%m-%dT%H:%M:%S")
-            + "Z"
-        )
+        return datetime.datetime.now(datetime.timezone.utc).strftime(r"%Y-%m-%dT%H:%M:%S") + "Z"
     else:
         raise KeyError
 
