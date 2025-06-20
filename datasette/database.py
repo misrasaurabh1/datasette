@@ -709,10 +709,7 @@ class Results:
         return [d[0] for d in self.description]
 
     def first(self):
-        if self.rows:
-            return self.rows[0]
-        else:
-            return None
+        return self.rows[0] if self.rows else None
 
     def single_value(self):
         if self.rows and 1 == len(self.rows) and 1 == len(self.rows[0]):
