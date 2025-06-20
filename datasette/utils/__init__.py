@@ -24,6 +24,7 @@ import urllib
 import yaml
 from .shutil_backport import copytree
 from .sqlite import sqlite3, supports_table_xinfo
+from functools import lru_cache
 
 if typing.TYPE_CHECKING:
     from datasette.database import Database
@@ -999,16 +1000,20 @@ def parse_metadata(content: str) -> dict:
 
 
 def _gather_arguments(fn, kwargs):
-    parameters = inspect.signature(fn).parameters.keys()
+    param_names = _get_param_names(fn)
     call_with = []
-    for parameter in parameters:
-        if parameter not in kwargs:
-            raise TypeError(
-                "{} requires parameters {}, missing: {}".format(
-                    fn, tuple(parameters), set(parameters) - set(kwargs.keys())
-                )
+    missing = []
+    for param in param_names:
+        try:
+            call_with.append(kwargs[param])
+        except KeyError:
+            missing.append(param)
+    if missing:
+        raise TypeError(
+            "{} requires parameters {}, missing: {}".format(
+                fn, param_names, tuple(missing)
             )
-        call_with.append(kwargs[parameter])
+        )
     return call_with
 
 
@@ -1460,3 +1465,9 @@ def deep_dict_update(dict1, dict2):
         else:
             dict1[key] = value
     return dict1
+
+
+@lru_cache(maxsize=128)
+def _get_param_names(fn):
+    # Returns tuple of parameter names for the given function
+    return tuple(inspect.signature(fn).parameters.keys())
