@@ -1,4 +1,3 @@
-import hashlib
 import json
 from datasette.utils import MultiParams, calculate_etag
 from mimetypes import guess_type
@@ -68,9 +67,7 @@ class Request:
 
     @property
     def url(self):
-        return urlunparse(
-            (self.scheme, self.host, self.path, None, self.query_string, None)
-        )
+        return urlunparse((self.scheme, self.host, self.path, None, self.query_string, None))
 
     @property
     def url_vars(self):
@@ -82,10 +79,7 @@ class Request:
 
     @property
     def headers(self):
-        return {
-            k.decode("latin-1").lower(): v.decode("latin-1")
-            for k, v in self.scope.get("headers") or []
-        }
+        return {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in self.scope.get("headers") or []}
 
     @property
     def host(self):
@@ -201,10 +195,7 @@ class AsgiStream:
             {
                 "type": "http.response.start",
                 "status": self.status,
-                "headers": [
-                    [key.encode("utf-8"), value.encode("utf-8")]
-                    for key, value in headers.items()
-                ],
+                "headers": [[key.encode("utf-8"), value.encode("utf-8")] for key, value in headers.items()],
             }
         )
         w = AsgiWriter(send)
@@ -272,17 +263,12 @@ async def asgi_start(send, status, headers=None, content_type="text/plain"):
         {
             "type": "http.response.start",
             "status": status,
-            "headers": [
-                [key.encode("latin1"), value.encode("latin1")]
-                for key, value in headers.items()
-            ],
+            "headers": [[key.encode("latin1"), value.encode("latin1")] for key, value in headers.items()],
         }
     )
 
 
-async def asgi_send_file(
-    send, filepath, filename=None, content_type=None, chunk_size=4096, headers=None
-):
+async def asgi_send_file(send, filepath, filename=None, content_type=None, chunk_size=4096, headers=None):
     headers = headers or {}
     if filename:
         headers["content-disposition"] = f'attachment; filename="{filename}"'
@@ -302,9 +288,7 @@ async def asgi_send_file(
         while more_body:
             chunk = await fp.read(chunk_size)
             more_body = len(chunk) == chunk_size
-            await send(
-                {"type": "http.response.body", "body": chunk, "more_body": more_body}
-            )
+            await send({"type": "http.response.body", "body": chunk, "more_body": more_body})
 
 
 def asgi_static(root_path, chunk_size=4096, headers=None, content_type=None):
@@ -338,9 +322,7 @@ def asgi_static(root_path, chunk_size=4096, headers=None, content_type=None):
             if_none_match = request.headers.get("if-none-match")
             if if_none_match and if_none_match == etag:
                 return await asgi_send(send, "", 304)
-            await asgi_send_file(
-                send, full_path, chunk_size=chunk_size, headers=headers
-            )
+            await asgi_send_file(send, full_path, chunk_size=chunk_size, headers=headers)
         except FileNotFoundError:
             await asgi_send_html(send, "404: File not found", 404)
             return
@@ -350,9 +332,11 @@ def asgi_static(root_path, chunk_size=4096, headers=None, content_type=None):
 
 class Response:
     def __init__(self, body=None, status=200, headers=None, content_type="text/plain"):
+        if headers is None:
+            headers = {}
         self.body = body
         self.status = status
-        self.headers = headers or {}
+        self.headers = headers
         self._set_cookie_headers = []
         self.content_type = content_type
 
@@ -360,10 +344,7 @@ class Response:
         headers = {}
         headers.update(self.headers)
         headers["content-type"] = self.content_type
-        raw_headers = [
-            [key.encode("utf-8"), value.encode("utf-8")]
-            for key, value in headers.items()
-        ]
+        raw_headers = [[key.encode("utf-8"), value.encode("utf-8")] for key, value in headers.items()]
         for set_cookie in self._set_cookie_headers:
             raw_headers.append([b"set-cookie", set_cookie.encode("utf-8")])
         await send(
@@ -390,9 +371,7 @@ class Response:
         httponly=False,
         samesite="lax",
     ):
-        assert samesite in SAMESITE_VALUES, "samesite should be one of {}".format(
-            SAMESITE_VALUES
-        )
+        assert samesite in SAMESITE_VALUES, "samesite should be one of {}".format(SAMESITE_VALUES)
         cookie = SimpleCookie()
         cookie[key] = value
         for prop_name, prop_value in (
@@ -411,12 +390,11 @@ class Response:
 
     @classmethod
     def html(cls, body, status=200, headers=None):
-        return cls(
-            body,
-            status=status,
-            headers=headers,
-            content_type="text/html; charset=utf-8",
-        )
+        # Pass positional args to avoid kwarg binding overhead
+        # Also set default header dict here to avoid per-instance check
+        if headers is None:
+            headers = {}
+        return cls(body, status, headers, "text/html; charset=utf-8")
 
     @classmethod
     def text(cls, body, status=200, headers=None):
