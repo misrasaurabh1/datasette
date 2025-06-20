@@ -1200,8 +1200,8 @@ _tilde_encoder = TildeEncoder().__getitem__
 
 @documented
 def tilde_encode(s: str) -> str:
-    "Returns tilde-encoded string - for example ``/foo/bar`` -> ``~2Ffoo~2Fbar``"
-    return "".join(_tilde_encoder(char) for char in s.encode("utf-8"))
+    """Returns tilde-encoded string - for example ``/foo/bar`` -> ``~2Ffoo~2Fbar``"""
+    return "".join(map(_tilde_encoder, s.encode("utf-8")))
 
 
 @documented
