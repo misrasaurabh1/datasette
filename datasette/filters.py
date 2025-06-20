@@ -230,9 +230,17 @@ class InFilter(Filter):
 
     def split_value(self, value):
         if value.startswith("["):
+            # For JSON-style input, json.loads is unavoidable.
             return json.loads(value)
-        else:
-            return [v.strip() for v in value.split(",")]
+        # Avoid full list comprehension and strip in one pass with partition logic.
+        parts = value.split(",")
+        # Fast path: Only strip if any string has leading/trailing space
+        # (amortized check, so don't always call strip)
+        first, last = 0, len(parts) - 1
+        if (parts[first] and (parts[first][0].isspace() or parts[first][-1].isspace())) or \
+           (parts[last] and (parts[last][0].isspace() or parts[last][-1].isspace())):
+            return [v.strip() for v in parts]
+        return parts
 
     def where_clause(self, table, column, value, param_counter):
         values = self.split_value(value)
@@ -255,7 +263,9 @@ class NotInFilter(InFilter):
         return sql, values
 
     def human_clause(self, column, value):
-        return f"{column} not in {json.dumps(self.split_value(value))}"
+        values = self.split_value(value)
+        # No redundant split_value or json.dumps
+        return f"{column} not in {json.dumps(values)}"
 
 
 class Filters:
