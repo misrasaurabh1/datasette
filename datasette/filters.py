@@ -377,23 +377,32 @@ class Filters:
             yield filter.key, filter.display, filter.no_argument
 
     def human_description_en(self, extra=None):
+        # Local variable assignment for faster lookup
+        filters_by_key = self._filters_by_key
+
+        # Preallocate bits list with some estimate / or empty
         bits = []
         if extra:
             bits.extend(extra)
-        for column, lookup, value in self.selections():
-            filter = self._filters_by_key.get(lookup, None)
-            if filter:
-                bits.append(filter.human_clause(column, value))
-        # Comma separated, with an ' and ' at the end
-        and_bits = []
-        commas, tail = bits[:-1], bits[-1:]
-        if commas:
-            and_bits.append(", ".join(commas))
-        if tail:
-            and_bits.append(tail[0])
-        s = " and ".join(and_bits)
-        if not s:
+
+        append = bits.append  # localize for perf in tight loop
+        for key, value in self.pairs:
+            if "__" in key:
+                column, lookup = key.rsplit("__", 1)
+            else:
+                column = key
+                lookup = "exact"
+            filt = filters_by_key.get(lookup)
+            if filt:
+                append(filt.human_clause(column, value))
+
+        if not bits:
             return ""
+        if len(bits) == 1:
+            s = bits[0]
+        else:
+            # Do not use slicing; just index directly
+            s = ", ".join(bits[:-1]) + " and " + bits[-1]
         return f"where {s}"
 
     def selections(self):
