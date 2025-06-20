@@ -369,45 +369,43 @@ def actor_from_request(datasette, request):
     if not datasette.setting("allow_signed_tokens"):
         return None
     max_signed_tokens_ttl = datasette.setting("max_signed_tokens_ttl")
-    authorization = request.headers.get("authorization")
-    if not authorization:
+    headers = request.headers
+    authorization = headers.get("authorization")
+    if (
+        not authorization
+        or not authorization.startswith("Bearer dstok_")
+    ):
         return None
-    if not authorization.startswith("Bearer "):
-        return None
-    token = authorization[len("Bearer ") :]
-    if not token.startswith(prefix):
-        return None
-    token = token[len(prefix) :]
+    # Fast path: single slice for token after prefix
+    token = authorization[13:]
     try:
         decoded = datasette.unsign(token, namespace="token")
     except itsdangerous.BadSignature:
         return None
-    if "t" not in decoded:
-        # Missing timestamp
-        return None
-    created = decoded["t"]
+
+    # Use local variables for lookups
+    created = decoded.get("t")
     if not isinstance(created, int):
-        # Invalid timestamp
         return None
     duration = decoded.get("d")
     if duration is not None and not isinstance(duration, int):
-        # Invalid duration
         return None
-    if (duration is None and max_signed_tokens_ttl) or (
-        duration is not None
-        and max_signed_tokens_ttl
-        and duration > max_signed_tokens_ttl
-    ):
-        duration = max_signed_tokens_ttl
-    if duration:
-        if time.time() - created > duration:
-            # Expired
-            return None
+
+    # Compute allowed duration
+    use_duration = duration
+    if max_signed_tokens_ttl:
+        if use_duration is None or (use_duration and use_duration > max_signed_tokens_ttl):
+            use_duration = max_signed_tokens_ttl
+
+    if use_duration and (time.time() - created > use_duration):
+        return None
+
     actor = {"id": decoded["a"], "token": "dstok"}
-    if "_r" in decoded:
-        actor["_r"] = decoded["_r"]
-    if duration:
-        actor["token_expires"] = created + duration
+    extra_role = decoded.get("_r")
+    if extra_role is not None:
+        actor["_r"] = extra_role
+    if use_duration:
+        actor["token_expires"] = created + use_duration
     return actor
 
 
