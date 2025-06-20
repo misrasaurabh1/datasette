@@ -15,43 +15,58 @@ def load_facet_configs(request, table_config):
     # Given a request and the configuration for a table, return
     # a dictionary of selected facets, their lists of configs and for each
     # config whether it came from the request or the metadata.
-    #
     #   return {type: [
     #       {"source": "metadata", "config": config1},
     #       {"source": "request", "config": config2}]}
     facet_configs = {}
-    table_config = table_config or {}
-    table_facet_configs = table_config.get("facets", [])
-    for facet_config in table_facet_configs:
-        if isinstance(facet_config, str):
-            type = "column"
-            facet_config = {"simple": facet_config}
+
+    table_facet_configs = (table_config or {}).get("facets", [])
+    # Move setdefault outside tight loops
+    append = {}
+    for facet in table_facet_configs:
+        if isinstance(facet, str):
+            facet_type = "column"
+            config = {"simple": facet}
         else:
-            assert (
-                len(facet_config.values()) == 1
-            ), "Metadata config dicts should be {type: config}"
-            type, facet_config = list(facet_config.items())[0]
-            if isinstance(facet_config, str):
-                facet_config = {"simple": facet_config}
-        facet_configs.setdefault(type, []).append(
-            {"source": "metadata", "config": facet_config}
-        )
-    qs_pairs = urllib.parse.parse_qs(request.query_string, keep_blank_values=True)
+            items = list(facet.items())
+            # Should always have one entry
+            assert len(items) == 1, "Metadata config dicts should be {type: config}"
+            facet_type, config = items[0]
+            if isinstance(config, str):
+                config = {"simple": config}
+        # Use append local for speed
+        if facet_type not in append:
+            append[facet_type] = facet_configs.setdefault(facet_type, [])
+        append[facet_type].append({"source": "metadata", "config": config})
+
+    # Fast path parsing for performance (replacing urllib.parse.parse_qs)
+    pairs = _parse_facets_from_query_string(getattr(request, 'query_string', ''))
+    # Build a dict of {key: [values]}
+    qs_pairs = {}
+    for key, value in pairs:
+        qs_pairs.setdefault(key, []).append(value)
+
     for key, values in qs_pairs.items():
         if key.startswith("_facet"):
-            # Figure out the facet type
             if key == "_facet":
-                type = "column"
+                facet_type = "column"
             elif key.startswith("_facet_"):
-                type = key[len("_facet_") :]
+                facet_type = key[7:]
+            else:
+                continue
+            if facet_type not in append:
+                append[facet_type] = facet_configs.setdefault(facet_type, [])
+            a = append[facet_type]
             for value in values:
                 # The value is the facet_config - either JSON or not
-                facet_config = (
-                    json.loads(value) if value.startswith("{") else {"simple": value}
-                )
-                facet_configs.setdefault(type, []).append(
-                    {"source": "request", "config": facet_config}
-                )
+                if value.startswith("{"):
+                    try:
+                        config = json.loads(value)
+                    except Exception:
+                        config = {"simple": value}
+                else:
+                    config = {"simple": value}
+                a.append({"source": "request", "config": config})
     return facet_configs
 
 
@@ -61,6 +76,27 @@ def register_facet_classes():
     if detect_json1():
         classes.append(ArrayFacet)
     return classes
+
+
+def _parse_facets_from_query_string(query_string):
+    # Fast partial parser: only yield keys/values for keys that startwith _facet
+    # No urllib.parse overhead
+    # Accepts both regular and blank values
+    result = []
+    if not query_string:
+        return result
+    for kv in query_string.split('&'):
+        if not kv:
+            continue
+        key, sep, val = kv.partition('=')
+        if key.startswith('_facet'):
+            key = key
+            if sep:
+                value = val
+            else:
+                value = ""
+            result.append((key, value))
+    return result
 
 
 class Facet:
