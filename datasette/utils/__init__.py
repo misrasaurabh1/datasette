@@ -1256,19 +1256,16 @@ def _handle_pair(key: str, value: str) -> dict:
     foo.bar, "baz" => {'foo': {'bar': 'baz'}}
     foo.bar, '{"baz": "qux"}' => {'foo': {'bar': "{'baz': 'qux'}"}}
     """
+    # This version is only used for compatibility but never called in hot path.
     try:
         value = json.loads(value)
     except json.JSONDecodeError:
-        # If it doesn't parse as JSON, treat it as a string
         pass
-
     keys = key.split(".")
     result = current_dict = {}
-
     for k in keys[:-1]:
         current_dict[k] = {}
         current_dict = current_dict[k]
-
     current_dict[keys[-1]] = value
     return result
 
@@ -1290,9 +1287,22 @@ def pairs_to_nested_config(pairs: typing.List[typing.Tuple[str, typing.Any]]) ->
     Parse a list of key-value pairs into a nested dictionary.
     """
     result = {}
+
     for key, value in pairs:
-        parsed_pair = _handle_pair(key, value)
-        result = _combine(result, parsed_pair)
+        # Parse JSON first, just like _handle_pair
+        try:
+            parsed_value = json.loads(value)
+        except json.JSONDecodeError:
+            parsed_value = value
+        # Walk the nested structure, setting dicts in-place (faster merge)
+        keys = key.split(".")
+        current_dict = result
+        for k in keys[:-1]:
+            if k not in current_dict or not isinstance(current_dict[k], dict):
+                current_dict[k] = {}
+            current_dict = current_dict[k]
+        current_dict[keys[-1]] = parsed_value
+
     return result
 
 
