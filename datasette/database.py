@@ -658,19 +658,27 @@ class Database:
         return await self.get_table_definition(view, "view")
 
     def __repr__(self):
+        # Localize attribute access for speed
         tags = []
-        if self.is_mutable:
+        is_mutable = self.is_mutable
+        is_memory = self.is_memory
+        db_hash = self.hash
+        db_size = self.size
+
+        if is_mutable:
             tags.append("mutable")
-        if self.is_memory:
+        if is_memory:
             tags.append("memory")
-        if self.hash:
-            tags.append(f"hash={self.hash}")
-        if self.size is not None:
-            tags.append(f"size={self.size}")
-        tags_str = ""
+        if db_hash:
+            tags.append(f"hash={db_hash}")
+        if db_size is not None:
+            tags.append(f"size={db_size}")
+
         if tags:
-            tags_str = f" ({', '.join(tags)})"
-        return f"<Database: {self.name}{tags_str}>"
+            # joined only when necessary
+            return f"<Database: {self.name} ({', '.join(tags)})>"
+        else:
+            return f"<Database: {self.name}>"
 
 
 class WriteTask:
