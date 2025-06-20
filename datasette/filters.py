@@ -367,9 +367,19 @@ class Filters:
         ]
     )
     _filters_by_key = {f.key: f for f in _filters}
-
     def __init__(self, pairs):
         self.pairs = pairs
+        # Precompute parsed selections for faster yield in selections()
+        parsed = []
+        for key, value in pairs:
+            if "__" in key:
+                # Only do rsplit if needed
+                column, lookup = key.rsplit("__", 1)
+            else:
+                column = key
+                lookup = "exact"
+            parsed.append((column, lookup, value))
+        self._parsed_selections = parsed
 
     def lookups(self):
         """Yields (lookup, display, no_argument) pairs"""
@@ -398,13 +408,8 @@ class Filters:
 
     def selections(self):
         """Yields (column, lookup, value) tuples"""
-        for key, value in self.pairs:
-            if "__" in key:
-                column, lookup = key.rsplit("__", 1)
-            else:
-                column = key
-                lookup = "exact"
-            yield column, lookup, value
+        # This is now just iterating over a precomputed list
+        return iter(self._parsed_selections)
 
     def has_selections(self):
         return bool(self.pairs)
@@ -413,15 +418,22 @@ class Filters:
         sql_bits = []
         params = {}
         i = 0
+        # Hoist lookup dict for micro-optimization
+        filters_by_key = self._filters_by_key
+        # Use the pre-tokenized selections
         for column, lookup, value in self.selections():
-            filter = self._filters_by_key.get(lookup, None)
+            filter = filters_by_key.get(lookup, None)
             if filter:
                 sql_bit, param = filter.where_clause(table, column, value, i)
                 sql_bits.append(sql_bit)
                 if param is not None:
-                    if not isinstance(param, list):
-                        param = [param]
-                    for individual_param in param:
+                    # Fast-path: avoid isinstance() and repeated list allocation
+                    if type(param) is list:
+                        param_list = param
+                    else:
+                        param_list = [param]
+                    # Only call f-string once per param (no generator)
+                    for individual_param in param_list:
                         param_id = f"p{i}"
                         params[param_id] = individual_param
                         i += 1
