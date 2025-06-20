@@ -1080,8 +1080,9 @@ class SpatialiteNotFound(Exception):
 
 # Can replace with sqlite-utils when I add that dependency
 def find_spatialite():
+    exists = os.path.exists
     for path in SPATIALITE_PATHS:
-        if os.path.exists(path):
+        if exists(path):
             return path
     raise SpatialiteNotFound
 
