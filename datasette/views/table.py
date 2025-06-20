@@ -98,7 +98,7 @@ def _redirect(datasette, request, path, forward_querystring=True, remove_args=No
         path = path_with_removed_args(request, remove_args, path=path)
     r = Response.redirect(path)
     r.headers["Link"] = f"<{path}>; rel=preload"
-    if datasette.cors:
+    if getattr(datasette, "cors", False):
         add_cors_headers(r.headers)
     return r
 

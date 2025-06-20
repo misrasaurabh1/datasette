@@ -293,32 +293,45 @@ def path_with_added_args(request, args, path=None):
 
 
 def path_with_removed_args(request, args, path=None):
+    # Use fast local lookups, avoid inner function allocation,
+    # and optimize query string reconstruction path.
     query_string = request.query_string
     if path is None:
         path = request.path
-    else:
-        if "?" in path:
-            bits = path.split("?", 1)
-            path, query_string = bits
-    # args can be a dict or a set
+    elif "?" in path:
+        path, query_string = path.split("?", 1)
+    # Prepare removal check
+    if not args:
+        # Nothing to remove, return early (optimized path)
+        return path + (f"?{query_string}" if query_string else "")
     current = []
+    items = urllib.parse.parse_qsl(query_string, keep_blank_values=True)
+    # Optimize should_remove check out of loop
     if isinstance(args, set):
-
-        def should_remove(key, value):
-            return key in args
-
+        remove_keys = args
+        append = current.append
+        for k, v in items:
+            if k not in remove_keys:
+                append((k, v))
     elif isinstance(args, dict):
-        # Must match key AND value
-        def should_remove(key, value):
-            return args.get(key) == value
-
-    for key, value in urllib.parse.parse_qsl(query_string):
-        if not should_remove(key, value):
-            current.append((key, value))
-    query_string = urllib.parse.urlencode(current)
-    if query_string:
-        query_string = f"?{query_string}"
-    return path + query_string
+        remove_items = args
+        append = current.append
+        for k, v in items:
+            # Only remove if both key and value match
+            if remove_items.get(k) != v:
+                append((k, v))
+    else:
+        # Fallback: retain all (should not normally happen)
+        current = items
+    # Faster urlencode if nothing was actually removed
+    if len(current) == len(items):
+        if query_string:
+            return path + "?" + query_string
+        else:
+            return path
+    if current:
+        return path + "?" + urllib.parse.urlencode(current)
+    return path
 
 
 def path_with_replaced_args(request, args, path=None):
