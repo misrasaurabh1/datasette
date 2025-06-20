@@ -1027,24 +1027,39 @@ def actor_matches_allow(actor, allow):
         return True
     if allow is False:
         return False
-    if actor is None and allow and allow.get("unauthenticated") is True:
-        return True
     if allow is None:
         return True
-    actor = actor or {}
+    if actor is None:
+        # Only check "unauthenticated" if actor is None
+        return bool(allow and allow.get("unauthenticated") is True)
+
+    # Ensure actor is a dict, and cache get
+    actor_get = actor.get
+
     for key, values in allow.items():
+        # Fast path for wildcard
         if values == "*" and key in actor:
             return True
-        if not isinstance(values, list):
-            values = [values]
-        actor_values = actor.get(key)
+        
+        # Always work with sets for intersection
+        if isinstance(values, list):
+            # If list, convert to set for fast lookup
+            values_set = set(values)
+        else:
+            values_set = {values}
+        
+        actor_values = actor_get(key)
         if actor_values is None:
             continue
-        if not isinstance(actor_values, list):
-            actor_values = [actor_values]
-        actor_values = set(actor_values)
-        if actor_values.intersection(values):
-            return True
+        if isinstance(actor_values, list):
+            # Check intersection with set: faster than making actor_values a set
+            for val in actor_values:
+                if val in values_set:
+                    return True
+        else:
+            # Single value check
+            if actor_values in values_set:
+                return True
     return False
 
 
