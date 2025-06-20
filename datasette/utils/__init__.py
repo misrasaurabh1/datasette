@@ -1256,20 +1256,28 @@ def _handle_pair(key: str, value: str) -> dict:
     foo.bar, "baz" => {'foo': {'bar': 'baz'}}
     foo.bar, '{"baz": "qux"}' => {'foo': {'bar': "{'baz': 'qux'}"}}
     """
-    try:
-        value = json.loads(value)
-    except json.JSONDecodeError:
-        # If it doesn't parse as JSON, treat it as a string
-        pass
+    # Fast check: does it look like something json.loads can handle?
+    if value and (
+        value[0] in '{["' or 
+        value[0] in '-0123456789' or 
+        value.startswith(('true', 'false', 'null'))
+    ):
+        try:
+            value = json.loads(value)
+        except json.JSONDecodeError:
+            pass  # If it doesn't parse as JSON, treat it as a string
 
     keys = key.split(".")
-    result = current_dict = {}
+    n = len(keys)
+    cur = result = {}
 
-    for k in keys[:-1]:
-        current_dict[k] = {}
-        current_dict = current_dict[k]
+    for i in range(n - 1):
+        k = keys[i]
+        nxt = {}
+        cur[k] = nxt
+        cur = nxt
 
-    current_dict[keys[-1]] = value
+    cur[keys[-1]] = value
     return result
 
 
