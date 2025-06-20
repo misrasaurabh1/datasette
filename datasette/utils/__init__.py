@@ -125,17 +125,24 @@ def urlsafe_components(token):
 def path_from_row_pks(row, pks, use_rowid, quote=True):
     """Generate an optionally tilde-encoded unique identifier
     for a row from its primary keys."""
+    # Fast path: use_rowid True means just one value
     if use_rowid:
-        bits = [row["rowid"]]
-    else:
-        bits = [
-            row[pk]["value"] if isinstance(row[pk], dict) else row[pk] for pk in pks
-        ]
-    if quote:
-        bits = [tilde_encode(str(bit)) for bit in bits]
-    else:
-        bits = [str(bit) for bit in bits]
-
+        bit = row["rowid"]
+        s = str(bit)
+        if quote:
+            s = tilde_encode(s)
+        return s
+    # Otherwise multiple PKs
+    bits = []
+    for pk in pks:
+        value = row[pk]
+        # Inline, reduces isinstance calls
+        if isinstance(value, dict):
+            value = value["value"]
+        string_value = str(value)
+        if quote:
+            string_value = tilde_encode(string_value)
+        bits.append(string_value)
     return ",".join(bits)
 
 
@@ -1200,8 +1207,10 @@ _tilde_encoder = TildeEncoder().__getitem__
 
 @documented
 def tilde_encode(s: str) -> str:
-    "Returns tilde-encoded string - for example ``/foo/bar`` -> ``~2Ffoo~2Fbar``"
-    return "".join(_tilde_encoder(char) for char in s.encode("utf-8"))
+    """Returns tilde-encoded string - for example ``/foo/bar`` -> ``~2Ffoo~2Fbar``"""
+    # Avoid repeated allocations by using a list comprehension
+    encoded_bytes = s.encode("utf-8")
+    return "".join([_tilde_encoder(char) for char in encoded_bytes])
 
 
 @documented
