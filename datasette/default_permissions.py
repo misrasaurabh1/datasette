@@ -279,33 +279,20 @@ def restrictions_allow_action(
     action: str,
     resource: Union[str, Tuple[str, str]],
 ):
-    "Do these restrictions allow the requested action against the requested resource?"
+    """Do these restrictions allow the requested action against the requested resource?"""
     if action == "view-instance":
-        # Special case for view-instance: it's allowed if the restrictions include any
-        # permissions that have the implies_can_view=True flag set
-        all_rules = restrictions.get("a") or []
-        for database_rules in (restrictions.get("d") or {}).values():
-            all_rules += database_rules
-        for database_resource_rules in (restrictions.get("r") or {}).values():
-            for resource_rules in database_resource_rules.values():
-                all_rules += resource_rules
-        permissions = [datasette.get_permission(action) for action in all_rules]
-        if any(p for p in permissions if p.implies_can_view):
-            return True
+        # Fast check for implies_can_view in any referenced permission.
+        for rule in _iter_all_rules_view_instance(restrictions):
+            p = datasette.get_permission(rule)
+            if p.implies_can_view:
+                return True
 
-    if action == "view-database":
-        # Special case for view-database: it's allowed if the restrictions include any
-        # permissions that have the implies_can_view=True flag set AND takes_database
-        all_rules = restrictions.get("a") or []
-        database_rules = list((restrictions.get("d") or {}).get(resource) or [])
-        all_rules += database_rules
-        resource_rules = ((restrictions.get("r") or {}).get(resource) or {}).values()
-        for resource_rules in (restrictions.get("r") or {}).values():
-            for table_rules in resource_rules.values():
-                all_rules += table_rules
-        permissions = [datasette.get_permission(action) for action in all_rules]
-        if any(p for p in permissions if p.implies_can_view and p.takes_database):
-            return True
+    elif action == "view-database":
+        # Fast check for implies_can_view AND takes_database in any referenced permission.
+        for rule in _iter_all_rules_view_database(restrictions, resource):
+            p = datasette.get_permission(rule)
+            if p.implies_can_view and p.takes_database:
+                return True
 
     # Does this action have an abbreviation?
     to_check = {action}
@@ -320,8 +307,11 @@ def restrictions_allow_action(
     all_allowed = restrictions.get("a")
     if all_allowed is not None:
         assert isinstance(all_allowed, list)
-        if to_check.intersection(all_allowed):
-            return True
+        # Check if any of to_check is in all_allowed, using set intersection
+        for candidate in to_check:
+            if candidate in all_allowed:
+                return True
+
     # How about for the current database?
     if resource:
         if isinstance(resource, str):
@@ -331,8 +321,10 @@ def restrictions_allow_action(
         database_allowed = restrictions.get("d", {}).get(database_name)
         if database_allowed is not None:
             assert isinstance(database_allowed, list)
-            if to_check.intersection(database_allowed):
-                return True
+            for candidate in to_check:
+                if candidate in database_allowed:
+                    return True
+
     # Or the current table? That's any time the resource is (database, table)
     if resource is not None and not isinstance(resource, str) and len(resource) == 2:
         database, table = resource
@@ -340,8 +332,9 @@ def restrictions_allow_action(
         # TODO: What should this do for canned queries?
         if table_allowed is not None:
             assert isinstance(table_allowed, list)
-            if to_check.intersection(table_allowed):
-                return True
+            for candidate in to_check:
+                if candidate in table_allowed:
+                    return True
 
     # This action is not specifically allowed, so reject it
     return False
@@ -418,3 +411,32 @@ def skip_csrf(scope):
         headers = scope.get("headers") or {}
         if dict(headers).get(b"content-type") == b"application/json":
             return True
+
+
+def _iter_all_rules_view_instance(restrictions):
+    """Generator yielding all rules for view-instance action."""
+    # Global rules
+    for rule in restrictions.get("a") or []:
+        yield rule
+    # Database-specific rules
+    for database_rules in (restrictions.get("d") or {}).values():
+        for rule in database_rules:
+            yield rule
+    # Resource-specific rules
+    for db_resource_rules in (restrictions.get("r") or {}).values():
+        for table_rules in db_resource_rules.values():
+            for rule in table_rules:
+                yield rule
+
+def _iter_all_rules_view_database(restrictions, resource):
+    """Generator yielding all rules for view-database action on the given resource (database)."""
+    # Global rules
+    for rule in restrictions.get("a") or []:
+        yield rule
+    # Database-specific rules for the named resource/database
+    for rule in (restrictions.get("d") or {}).get(resource, []):
+        yield rule
+    # All tables in this database
+    for table_rules in ((restrictions.get("r") or {}).get(resource) or {}).values():
+        for rule in table_rules:
+            yield rule
