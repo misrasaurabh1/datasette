@@ -692,12 +692,11 @@ whitespace_re = re.compile(r"\s")
 
 def is_url(value):
     """Must start with http:// or https:// and contain JUST a URL"""
-    if not isinstance(value, str):
-        return False
-    if not value.startswith("http://") and not value.startswith("https://"):
-        return False
-    # Any whitespace at all is invalid
-    if whitespace_re.search(value):
+    if (
+        not isinstance(value, str)
+        or not value.startswith(("http://", "https://"))
+        or whitespace_re.search(value)
+    ):
         return False
     return True
 
