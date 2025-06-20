@@ -1184,13 +1184,18 @@ _space = ord(" ")
 class TildeEncoder(dict):
     # Keeps a cache internally, via __missing__
     def __missing__(self, b):
-        # Handle a cache miss, store encoded string in cache and return.
-        if b in _TILDE_ENCODING_SAFE:
-            res = chr(b)
-        elif b == _space:
+        # Pull globals as locals for fast access
+        tilde_safe = _TILDE_ENCODING_SAFE
+        space = _space
+        to_chr = chr
+
+        if b in tilde_safe:
+            res = to_chr(b)
+        elif b == space:
             res = "+"
         else:
-            res = "~{:02X}".format(b)
+            # Use f-string which is faster than .format()
+            res = f"~{b:02X}"
         self[b] = res
         return res
 
