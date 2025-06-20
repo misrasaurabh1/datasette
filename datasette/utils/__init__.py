@@ -798,9 +798,10 @@ class CustomRow(OrderedDict):
 
 
 def value_as_boolean(value):
-    if value.lower() not in ("on", "off", "true", "false", "1", "0"):
+    val = value.lower()
+    if val not in {"on", "off", "true", "false", "1", "0"}:
         raise ValueAsBooleanError
-    return value.lower() in ("on", "true", "1")
+    return val in {"on", "true", "1"}
 
 
 class ValueAsBooleanError(ValueError):
